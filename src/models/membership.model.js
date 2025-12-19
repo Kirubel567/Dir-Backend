@@ -8,8 +8,8 @@ export const membershipSchema = new mongoose.Schema({
   },
   role: {
     type: String,
-    enum: ["owner", "maintainer", "contributor"],
-    default: "contributor",
+    enum: ["owner", "maintainer", "contributor", "viewer"],
+    default: "viewer",
   },
   joinedAt: { type: Date, default: Date.now },
 });
