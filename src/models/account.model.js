@@ -3,7 +3,8 @@ import mongoose from "mongoose";
 const accountSchema = new mongoose.Schema(
   {
     userId: {
-      type: String,
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
       required: true,
       index: true,
     },
@@ -18,7 +19,12 @@ const accountSchema = new mongoose.Schema(
       type: String,
       required: true,
     },
-
+    accessToken: { 
+        type: String,  
+    },
+    refreshToken: { 
+        type: String,
+    },
     accessTokenExpiresAt: {
       type: Date,
     },
