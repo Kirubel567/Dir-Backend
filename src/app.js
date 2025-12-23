@@ -11,14 +11,13 @@ import userRouter from "./routes/user.routes.js";
 //configure dotenv 
 dotenv.config();
 // import cors from "cors";
-
 const app = express();
-
-// mounting better-auth routes
-app.all("/api/auth", toNodeHandler(auth));
 
 //middlewares
 app.use(express.json());
+
+// mounting better-auth routes
+app.all("/api/auth/*path", toNodeHandler(auth));
 
 //routes
 app.use("/api/users",  userRouter);
