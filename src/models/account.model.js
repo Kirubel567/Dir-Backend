@@ -22,9 +22,9 @@ const accountSchema = new mongoose.Schema(
     accessToken: { 
         type: String,  
     },
-    refreshToken: { 
-        type: String,
-    },
+    // refreshToken: { 
+    //     type: String,
+    // }, no refresh token for github
     accessTokenExpiresAt: {
       type: Date,
     },
