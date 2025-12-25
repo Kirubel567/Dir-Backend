@@ -1,6 +1,5 @@
 import { StatusCodes } from "http-status-codes";
-import expressAsyncHandler from "express-async-handler";
 
-export const exposeMe = expressAsyncHandler(async (req, res) => {
+export const exposeMe = async (req, res) => {
   res.status(StatusCodes.OK).json({ user: req.user });
-});
+};

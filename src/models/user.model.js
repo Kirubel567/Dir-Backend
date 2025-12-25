@@ -2,22 +2,79 @@ import mongoose from "mongoose";
 
 const userSchema = new mongoose.Schema(
   {
-    _id: { type: String }, // Better Auth uses string IDs
-    name: { type: String, required: true },
-    email: { type: String, unique: true, required: true, lowercase: true },
-    emailVerified: { type: Boolean, default: false },
-    image: { type: String },
-    
-    // Your Custom GitHub Fields
-    githubUserName: { type: String }, 
-    gitHubID: { type: String },
-    role: { type: String, enum: ["user", "admin"], default: "user" },
-    isActive: { type: Boolean, default: true },
-    
-    // Relations (Keep these as ObjectIds if they point to other Mongoose models)
-    reposOwned: [{ type: mongoose.Schema.Types.ObjectId, ref: "Repository" }],
-  },
-  { timestamps: true, _id: false } // Disable auto-generation of ObjectId
-);
+    //github profile fields
+    githubUsername: {
+      type: String,
+      trim: true,
+    },
+    githubId: {
+      type: String,
+      required: true,
+      unique: true,
+      index: true,
+    },
+    email: {
+      type: String,
+      unique: true,
+      sparse: true,
+      trim: true,
+    },
+    avatarUrl: {
+      type: String,
+    },
+    profileUrl: {
+      type: String,
+    },
 
-export default mongoose.models.User || mongoose.model("User", userSchema);
+    bio: {
+      type: String,
+      trim: true,
+    },
+
+    //system control fields
+    role: {
+      type: String,
+      enum: ["user", "admin"],
+      default: "user",
+    },
+    isActive: {
+      type: Boolean,
+      default: true,
+    },
+    lastLogin: {
+      type: Date,
+    },
+
+    //user settings
+    preferences: {
+      notificationsEnabled: {
+        type: Boolean,
+        default: true,
+      },
+      emailNotifications: {
+        type: Boolean,
+        default: false,
+      },
+      theme: {
+        type: String,
+        enum: ["light", "dark", "system"],
+        default: "system",
+      },
+    },
+    //relations
+    reposOwned: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Repository",
+      },
+    ],
+    notifications: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Notification",
+      },
+    ],
+  },
+  { timestamps: true }
+);
+export const User = mongoose.model("User", userSchema);
