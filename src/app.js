@@ -1,25 +1,53 @@
 import express from "express";
+import session from "express-session";
 import asyncHandler from "express-async-handler";
+import passport from "passport";
 import dotenv from "dotenv";
-import { toNodeHandler } from "better-auth/node";
-import { auth } from "./config/betterAuth.js";
-import {
-  routeNotFound,
-  globalErrorHandler,
-} from "./middlewares/error.middleware.js";
+import {routeNotFound, globalErrorHandler,} from "./middlewares/error.middleware.js";
+import cors from "cors";
+import authRouter from "./routes/auth.routes.js";
+import "./auth/passport.js"; //serialization and deserliazation logic
 import userRouter from "./routes/user.routes.js";
 //configure dotenv 
 dotenv.config();
-// import cors from "cors";
 
+//create express app
 const app = express(); 
 
 //middlewares
 app.use(express.json());
+app.use(express.urlencoded({extended: true}));
+app.use(cors({
+    origin: process.env.CLIENT_URL,
+    credentials: true,
+}));
+
+//session middleware
+app.use(session({
+  name: "dir.sid",
+  secret: process.env.SESSION_SECRET, 
+  resave: false,
+  saveUninitialized: false,
+  cookie: {
+    httpOnly: true,
+    secure: false, //true if it's https
+    maxAge: 1000 * 60 * 60 * 24 * 7,
+  },
+}));
+
+//initialize passport
+app.use(passport.initialize());
+app.use(passport.session());
+
+//routes middlewares
+app.use("/auth", authRouter);
+app.use("/api", userRouter);
 
 //routes
-// app routes
-app.use("/api/users", userRouter);
+// Routes (auth routes added in Phase 3)
+app.get("/health", (req, res) => {
+  res.json({ status: "OK" });
+});
 
 //global and 404 error handling middlewares
 app.use(routeNotFound);
