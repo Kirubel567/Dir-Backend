@@ -7,6 +7,7 @@ import {routeNotFound, globalErrorHandler,} from "./middlewares/error.middleware
 import cors from "cors";
 import authRouter from "./routes/auth.routes.js";
 import "./auth/passport.js"; //serialization and deserliazation logic
+import "./auth/jwt.strategy.js"; //jwt strategy
 import userRouter from "./routes/user.routes.js";
 
 //configure dotenv 

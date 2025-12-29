@@ -1,6 +1,5 @@
-export const authMiddleware = (req, res, next) => {
-    if (req.isAuthenticated()) {
-        return next();
-    }
-    return res.status(401).json({message: "Unauthorized"});
-};
+import passport from "passport";
+
+export const authMiddleware = passport.authenticate("jwt", {session: false})
+
+

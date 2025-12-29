@@ -71,7 +71,7 @@ passport.use(new GitHubStrategy(
                     }
                 });
 
-                const reposOwned = repoRes.data.map(repo => repo.full_name);
+                
 
                 const reposObjectIds = await Promise.all(repoRes.data.map( async (repo) => {
                     const r = await Repository.findOneAndUpdate(
