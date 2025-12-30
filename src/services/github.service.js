@@ -21,6 +21,9 @@ export const repositoryService = {
               name: repo.full_name,
               description: repo.description,
               ownerId: user._id, // linking to the user first saved
+              url: repo.html_url,
+              isPrivate: repo.private,
+              language: repo.language,
             },
             { upsert: true, new: true, setDefaultsOnInsert: true}
           );

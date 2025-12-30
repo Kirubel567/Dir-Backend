@@ -18,9 +18,22 @@ const repositorySchema = new mongoose.Schema(
       type: String,
     },
     ownerId: {
-      type: String,
+      type: mongoose.Schema.Types.ObjectId,
       ref: "User",
       required: true,
+    },
+    //github syncing on dashboard fields
+    url: {
+      type: String,
+    },
+
+    isPrivate: {
+      type: Boolean,
+      default: false,
+    },
+    language: {
+      //primary programming language
+      type: String,
     },
 
     members: [membershipSchema],
