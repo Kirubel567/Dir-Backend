@@ -14,6 +14,7 @@ export const githubAuthCallback = (req, res) => {
     const token = jwt.sign(
       {
         id: user._id,
+        accessToken: req.authInfo.accessToken,
       },
       process.env.JWT_SECRET,
       { expiresIn: "7d" }
@@ -26,7 +27,7 @@ export const githubAuthCallback = (req, res) => {
       token,
       user:{
         id: user._id,
-        username: user.username,
+        username: user.githubUsername,
         email: user.email,
         avatarUrl: user.avatarUrl,
       },

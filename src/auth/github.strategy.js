@@ -17,78 +17,60 @@ passport.use(
     },
     async (accessToken, refreshToken, profile, cb) => {
       try {
-        // Initial user upsert
-        let email =
-          profile.emails && profile.emails[0] ? profile.emails[0].value : null;
+        let email = profile.emails?.[0]?.value || null;
 
-        // If email is missing from profile, fetch it manually from GitHub's email API
         if (!email) {
           const octokit = createGitHubClient(accessToken);
-          const emailRes = await octokit.rest.users.listEmailsForAuthenticatedUser();
-          // Find the primary email, or just take the first one available
+          const emailRes =
+            await octokit.rest.users.listEmailsForAuthenticatedUser();
           const primaryEmail =
-          emailRes.data.find((e) => e.primary) || emailRes.data[0];
+            emailRes.data.find((e) => e.primary) || emailRes.data[0];
           email = primaryEmail ? primaryEmail.email : null;
         }
 
-        if (!email) {
-          return cb(new Error("Email is required from GitHub profile"), null);
-        }
+        const totalRepos =
+          (profile._json.public_repos || 0) +
+          (profile._json.total_private_repos || 0);
 
-        //create or finding user
         let user = await User.findOne({ githubId: profile.id });
+        const isNewUser = !user;
 
-        // id migration safety
-        if (!user) {
-          user = await User.findOne({ githubUserName: profile.username });
-        }
-
-        // creating new user
-        if (!user) {
+        if (isNewUser) {
           user = new User({
             githubId: profile.id,
             email: email,
+            githubUsername: profile.username,
+            avatarUrl: profile.photos?.[0]?.value || "",
+            profileUrl: profile.profileUrl,
+            githubRepoCount: totalRepos,
+            lastLogin: new Date(),
           });
+        } else {
+          // Update existing user data
+          user.githubUsername = profile.username;
+          user.email = email;
+          user.avatarUrl = profile.photos?.[0]?.value || "";
+          user.githubRepoCount = totalRepos;
+          user.lastLogin = new Date();
         }
 
-        //updating user data
-
-        user.githubId = profile.id;
-        //we need to upgrade email here also, for the ones that already exist in our db
-        user.email = email;//added email update
-        user.githubUsername = profile.username;
-        user.avatarUrl = profile.photos?.[0]?.value || "";
-        user.profileUrl = profile.profileUrl;
-        user.lastLogin = new Date();
-
-        await user.save();
-
-        //fetching repos from github API
-        const reposObjectIds = await repositoryService.syncUserRepos(
-          user,
-          accessToken
-        );
-
-        // Handling Notification
-
-        // create a welcome notification as first one when repo is synced
-        if (reposObjectIds.length > 0 && user.notifications.length === 0) {
+        // Only create the welcome notification if it's a brand new user
+        if (isNewUser && totalRepos > 0) {
           const welcomeNote = await Notification.create({
             userId: user._id,
-            message: `Successfully linked ${reposObjectIds.length} repositories from GitHub.`,
+            message: `Welcome! We found ${totalRepos} repositories on your GitHub. Head over to Discovery to import your first workspace.`,
             type: "message",
-            repoId: reposObjectIds[0],
-            targetType: "repository",
-            targetId: reposObjectIds[0],
             isRead: false,
+            targetType: "system",
           });
 
-          //pushing this notification
           user.notifications.push(welcomeNote._id);
         }
 
         await user.save();
-        return cb(null, user);
+
+        user.accessToken = accessToken;
+        return cb(null, user, { accessToken });
       } catch (err) {
         console.error("Auth Error: ", err);
         return cb(err, null);

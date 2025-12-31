@@ -4,7 +4,7 @@ export const notificationSchema = new mongoose.Schema({
     userId:{
         type: String,
         ref:"User",
-        required: true,
+        required: false,
     },
     message:{
         type:String,
@@ -23,12 +23,12 @@ export const notificationSchema = new mongoose.Schema({
     },
     targetType:{
         type:String,
-        enum:[ "repository", "pull_request", "issue", "message"],
-        required:true,
+        enum:["system","repository", "pull_request", "issue", "message"],
+        required:false,
     },
     targetId:{
         type:mongoose.Schema.Types.ObjectId,
-        required:true,
+        required:false,
 
     },
     isRead:{

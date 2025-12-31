@@ -62,6 +62,10 @@ const userSchema = new mongoose.Schema(
         default: "system",
       },
     },
+    githubRepoCount: { //Store total count for UI
+        type: Number,
+        default: 0
+    },
     //relations
     reposOwned: [
       {

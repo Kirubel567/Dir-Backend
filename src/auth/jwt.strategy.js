@@ -13,6 +13,7 @@ passport.use(
     try {
       const user = await User.findById(jwt_payload.id);
       if (user) {
+        user.accessToken = jwt_payload.accessToken;
         return done(null, user);
       }
       return done(null, false);

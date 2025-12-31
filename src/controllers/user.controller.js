@@ -42,6 +42,7 @@ export const getUserStats = async (req, res) => {
       data: {
         activeWorkspacesCount,
         unreadNotifications,
+        githubTotalCount: req.user.githubRepoCount,
         totalTasks: 0,
         role: req.user.role,
       },

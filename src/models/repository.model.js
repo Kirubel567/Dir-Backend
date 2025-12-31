@@ -8,6 +8,11 @@ import { membershipSchema } from "./membership.model.js";
 const repositorySchema = new mongoose.Schema(
   {
     //github profile fields
+    githubId: { 
+      type: String,
+      required: true,
+      unique: true 
+    },
     name: {
       type: String,
       required: true,
