@@ -24,7 +24,12 @@ export const githubAuthCallback = (req, res) => {
       status: "success",
       message: "GitHub Auth successful",
       token,
-      user,
+      user:{
+        id: user._id,
+        username: user.username,
+        email: user.email,
+        avatarUrl: user.avatarUrl,
+      },
     });
   } catch (error) {
     res
