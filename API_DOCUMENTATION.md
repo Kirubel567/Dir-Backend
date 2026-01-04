@@ -206,7 +206,7 @@ Response (Directory):
 {
   "status": "success",
   "type": "dir",
-  "data": [
+  "files": [
     {
       "name": "src",
       "path": "src",
@@ -335,7 +335,8 @@ Response (Directory):
     "_id": "60d5fa...",
     "workspaceName": "Project Alpha",
     "tags": ["favorites", "react"]
-  }
+  },
+  "newTagCreated": true
 }
 ```
 
