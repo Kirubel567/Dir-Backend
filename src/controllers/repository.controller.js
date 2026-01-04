@@ -273,6 +273,7 @@ export const manualSync = async (req, res) => {
     await Promise.all([
       redisClient.del(getRepoDetailKey(req.params.id)),
       redisClient.del(getActiveListKey(req.user._id)),
+      redisClient.del(getDiscoveryKey(req.user._id)),
     ]);
 
     res
@@ -343,6 +344,7 @@ export const updateRepo = async (req, res) => {
     if (redisClient) {
       await redisClient.del(getRepoDetailKey(id));
       await redisClient.del(getActiveListKey(req.user._id));
+      await redisClient.del(getDiscoveryKey(req.user._id));
     }
 
     res.status(StatusCodes.OK).json({
@@ -860,7 +862,7 @@ export const updateFile = async (req, res) => {
 
     // invalidating cache
     await redisClient.del(`repo:content:${repo.githubOwner.toLowerCase()}:${repo.githubRepoName.toLowerCase()}:${path}`);
-
+    await 
     res.status(StatusCodes.OK).json({
       status: "success",
       message: "File successfully committed to Github",
