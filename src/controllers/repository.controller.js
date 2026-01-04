@@ -164,22 +164,17 @@ export const getActiveRepos = async (req, res) => {
     //fetch query to get al the repos where user is a member
     let query = { "members.userId": req.user._id };
 
-    if (tag) {
-      query.tags = tag;
-    }
+    if (tag) query.tags = tag;
 
     //search across workspaceName, githubRepoName and tags
     // only caching the default view (no search/tag)
-
     if (!search && !tag) {
       const cacheKey = getActiveListKey(req.user._id);
-      const activeRepos = await getOrSetCache(
-        cacheKey,
-        async () => {
-          return await Repository.find(query).select("-webhookEvents").lean();
-        },
-        1800
-      );
+      const activeRepos = await getOrSetCache(cacheKey, async () => {
+        return await Repository.find(query).select("-webhookEvents").lean();
+      }, 1800);
+      
+      return res.status(StatusCodes.OK).json({ status: "success", results: activeRepos.length, data: activeRepos });
     }
 
     // direct db query for filtered results
@@ -314,12 +309,13 @@ export const updateRepo = async (req, res) => {
         .json({ message: "workspace not found" });
     }
 
-    const okctokit = createGitHubClient(req.user.accessToken);
+    const octokit = createGitHubClient(req.user.accessToken);
 
     //update the repo in github also
     const githubUpdate = {
       owner: repo.githubOwner,
       repo: repo.githubRepoName,
+      description: description
     };
 
     if (description !== undefined && description !== null) {
