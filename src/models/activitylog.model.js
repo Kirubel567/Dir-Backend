@@ -17,7 +17,7 @@ export const activityLogSchema = new mongoose.Schema({
     },
     targetType: {
         type: String,
-        enum: ["repository", "pull_request", "issue", "message", "comment", "tag", "user", "workspace"],
+        enum: ["repository", "pull_request", "issue", "message", "comment", "tag", "user", "workspace", "file"],
         required: true,
     },
     targetId: {
