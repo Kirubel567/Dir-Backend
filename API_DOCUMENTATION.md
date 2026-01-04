@@ -1,6 +1,6 @@
 # Dir API Documentation
 
-## Overview
+## Overviews
 
 The Dir API is a comprehensive repository and user management system that provides endpoints for authentication, user profile management, and repository operations.
 
