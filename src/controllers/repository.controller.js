@@ -865,3 +865,70 @@ export const deleteFile = async (req, res) => {
     });
   }
 };
+
+//@desc 15 Create a new file in the repository(also in the workspace it's the same)
+//@route POST /api/repos/:id/contents
+export const createFile = async (req, res) => {
+  try {
+    const { id: workspaceId } = req.params;
+    const { path, content, commitMessage } = req.body;
+
+    // validate the reqiuest
+    if (!path || content === undefined) {
+      return res.status(StatusCodes.BAD_REQUEST).json({
+        message: "File path and content are required to create a new file.",
+      });
+    }
+
+    const repo = await Repository.findById(workspaceId);
+    if (!repo) {
+      return res.status(StatusCodes.NOT_FOUND).json({
+        message: "Workspace not found.",
+      });
+    }
+
+    const octokit = createGitHubClient(req.user.accessToken);
+
+    // Encode content to Base64 needed for github api
+    const base64Content = Buffer.from(content).toString("base64");
+
+    // Push to GitHub
+    const { data: createdData } =
+      await octokit.rest.repos.createOrUpdateFileContents({
+        owner: repo.githubOwner,
+        repo: repo.githubRepoName,
+        path: path,
+        message: commitMessage || `Created ${path} via Dir`,
+        content: base64Content,
+      });
+
+    // Log the creation
+    await createLog(
+      req.user._id,
+      repo._id,
+      "created file",
+      "file",
+      repo._id,
+      `Added new file: ${path}`
+    );
+
+    res.status(StatusCodes.CREATED).json({
+      status: "success",
+      message: "File successfully created",
+      data: {
+        sha: createdData.content.sha,
+        url: createdData.content.html_url,
+      },
+    });
+  } catch (err) {
+    //file alredy exists
+    if (err.status === 422) {
+      return res.status(StatusCodes.BAD_REQUEST).json({
+        message: "A file with this name already exists at this path.",
+      });
+    }
+    res
+      .status(StatusCodes.INTERNAL_SERVER_ERROR)
+      .json({ message: err.message });
+  }
+};
