@@ -19,6 +19,7 @@ const githubEventSchema = new mongoose.Schema(
         "fork",
         "star",
         "watch",
+        "ping"
       ],
     },
     actorUsername: {
