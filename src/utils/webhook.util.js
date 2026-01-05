@@ -1,7 +1,7 @@
 import crypto from "crypto";
 
 //verify the signature sent by github
-export const verifyGithubSigniture = (signature, payload, secret) => {
+export const verifyGithubSignature = (signature, payload, secret) => {
   if (!signature || !secret) return false;
 
   const hmac = crypto.createHmac("sha256", secret);
