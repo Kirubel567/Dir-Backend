@@ -9,7 +9,8 @@ import redisClient from "../config/redis.js";
 import { getLanguageColor } from "../utils/githubColors.js";
 import { Tag } from "../models/tag.model.js";
 import { createLog } from "../utils/activity.util.js";
-
+import { registerWebhook } from "../services/webhook.service.js";
+import { invalidateRepoCache } from "../utils/cache.util.js";
 // cache keys
 
 const getDiscoveryKey = (userId) => `repos:discovery:${userId}`;
@@ -17,7 +18,6 @@ const getActiveListKey = (userId) => `repos:active:${userId}`;
 const getRepoDetailKey = (userId) => `repos:detail:${userId}`;
 //@desc 1. discovery: list remote github repositories
 //@route GET /api/repos/discovery
-
 export const getGithubRepos = async (req, res) => {
   try {
     const cacheKey = getDiscoveryKey(req.user._id);
@@ -41,7 +41,6 @@ export const getGithubRepos = async (req, res) => {
             .filter((repo) => repo.githubId)
             .map((repo) => repo.githubId.toString())
         );
-
         return githubRepos.map((repo) => ({
           githubId: repo.id.toString(),
           githubRepoName: repo.name,
@@ -95,25 +94,13 @@ export const importRepo = async (req, res) => {
       });
     }
 
-    //generate the secrete for handshake
-    //this is added don't forget to check it, it's added for webhook
-    const webhookSecret = crypto.randomBytes(20).toString("hex");
-
     const octokit = createGitHubClient(req.user.accessToken);
-
-    //register the webhook on Github(send it)
-    const { data: webhook } = await octokit.rest.repos.createWebhook({
-      owner: githubOwner,
-      repo: githubRepoName,
-      config: {
-        url: `{process.env.BASE_URL}/api/webhooks/github`,
-        content_typ: "json",
-        secret: webhookSecret,
-      },
-      events: ["push", "pull_request", "issues", "star"],
-      active: true,
-    });
-
+    //create a webhook client here
+    const { webhookId, secret } = await registerWebhook(
+      octokit,
+      githubOwner,
+      githubRepoName
+    );
     //create new repository document to store it in repository collection
     const newRepo = await Repository.create(
       [
@@ -133,8 +120,8 @@ export const importRepo = async (req, res) => {
           ],
           //this also added for webhook
           webhookSettings: {
-            webhookId: webhook.id.toString(),
-            secret: webhookSecret,
+            webhookId,
+            secret,
             active: true,
           },
         },
@@ -153,8 +140,10 @@ export const importRepo = async (req, res) => {
     );
 
     // cache invalidation
-    await redisClient.del(`user:stats:${req.user._id}`);
-
+    //instead of this I created a
+    // await redisClient.del(`user:stats:${req.user._id}`);
+    //cache invalidation
+    await invalidateRepoCache(req.user._id, newRepo[0]._id);
     //update user's reposOwned list
     await User.findByIdAndUpdate(
       req.user._id,
@@ -199,11 +188,19 @@ export const getActiveRepos = async (req, res) => {
     // only caching the default view (no search/tag)
     if (!search && !tag) {
       const cacheKey = getActiveListKey(req.user._id);
-      const activeRepos = await getOrSetCache(cacheKey, async () => {
-        return await Repository.find(query).select("-webhookEvents").lean();
-      }, 1800);
-      
-      return res.status(StatusCodes.OK).json({ status: "success", results: activeRepos.length, data: activeRepos });
+      const activeRepos = await getOrSetCache(
+        cacheKey,
+        async () => {
+          return await Repository.find(query).select("-webhookEvents").lean();
+        },
+        1800
+      );
+
+      return res.status(StatusCodes.OK).json({
+        status: "success",
+        results: activeRepos.length,
+        data: activeRepos,
+      });
     }
 
     // direct db query for filtered results
@@ -329,7 +326,9 @@ export const updateRepo = async (req, res) => {
 
     const repo = await Repository.findById(id);
     if (!repo) {
-      return res.status(StatusCodes.NOT_FOUND).json({ message: "Workspace not found" });
+      return res
+        .status(StatusCodes.NOT_FOUND)
+        .json({ message: "Workspace not found" });
     }
 
     // 2. Prepare GitHub Update
@@ -348,7 +347,7 @@ export const updateRepo = async (req, res) => {
 
     // OPTIONAL: If workspaceName should sync with GitHub name:
     // if (workspaceName !== undefined) {
-    //   githubUpdate.name = workspaceName; 
+    //   githubUpdate.name = workspaceName;
     //   isGithubUpdate = true;
     // }
 
@@ -376,7 +375,9 @@ export const updateRepo = async (req, res) => {
 
     res.status(StatusCodes.OK).json({
       status: "success",
-      message: isGithubUpdate ? "Updated locally and on GitHub" : "Updated locally",
+      message: isGithubUpdate
+        ? "Updated locally and on GitHub"
+        : "Updated locally",
       data: updatedRepo,
     });
   } catch (error) {
@@ -392,22 +393,22 @@ export const addTags = async (req, res) => {
   try {
     const { tag } = req.body;
 
-    // standardize formatting 
+    // standardize formatting
     const formattedTag = tag.trim().toLowerCase().replace(/\s+/g, "-");
 
     // ensuring the tag exists in the global tag list if not creating it
     const tagResult = await Tag.findOneAndUpdate(
-      {name: formattedTag},
+      { name: formattedTag },
       {
         $setOnInsert: {
           name: formattedTag,
           description: `Custom Tag - ${formattedTag} created via workspace`,
           color: "#4f46e5",
           createdBy: req.user._id,
-        }
+        },
       },
-      {upsert: true, new: true, includeResultMetadata: true}
-    )
+      { upsert: true, new: true, includeResultMetadata: true }
+    );
 
     const isNewTag = tagResult.upsertedId !== null;
 
@@ -420,10 +421,10 @@ export const addTags = async (req, res) => {
 
     // Safety Check: If repo doesn't exist, don't try to log or delete cache
     if (!repo) {
-      return res.status(StatusCodes.NOT_FOUND).json({ message: "Workspace not found" });
+      return res
+        .status(StatusCodes.NOT_FOUND)
+        .json({ message: "Workspace not found" });
     }
-
-    
 
     // log tagging a repo
     await createLog(
@@ -442,7 +443,9 @@ export const addTags = async (req, res) => {
       isNewTag && redisClient.del("explore:db_tags"),
     ]);
 
-    res.status(StatusCodes.OK).json({ status: "success", data: repo, newTagCreated: isNewTag });
+    res
+      .status(StatusCodes.OK)
+      .json({ status: "success", data: repo, newTagCreated: isNewTag });
   } catch (error) {
     res
       .status(StatusCodes.INTERNAL_SERVER_ERROR)
@@ -514,6 +517,13 @@ export const createWorkspace = async (req, res) => {
       repo: githubRepoName,
     });
 
+    //create a webhook id for this specific workspace to communicate with the remote repo
+    const { webhookId, secret } = await registerWebhook(
+      octokit,
+      req.user.githubUsername,
+      githubRepoName
+    );
+
     // check the import state in dir for the specifc github repo
     const existingRepo = await Repository.findOne({
       githubId: githubRepo.id.toString(),
@@ -541,6 +551,11 @@ export const createWorkspace = async (req, res) => {
           url: githubRepo.html_url,
           isPrivate: githubRepo.private,
           language: githubRepo.language,
+          webhookSettings: {
+            webhookId,
+            secret,
+            active: true,
+          },
           members: [{ userId: req.user._id, role: "owner" }],
           channels: [
             { name: "general", channel_id: new mongoose.Types.ObjectId() },
@@ -564,13 +579,14 @@ export const createWorkspace = async (req, res) => {
       "workspace",
       newRepo[0]._id,
       `Created workspace ${newRepo[0].workspaceName}`
-    )
+    );
 
-    
     await Promise.all([
       redisClient.del(getActiveListKey(req.user._id)),
+      redisClient.del(getRepoDetailKey(req.params._id)),
+      redisClient.del(getDiscoveryKey(req.user._id)),
       redisClient.del(`user:stats:${req.user._id}`),
-    ])
+    ]);
 
     await session.commitTransaction();
     res
@@ -621,7 +637,12 @@ export const createRemoteRepo = async (req, res) => {
         auto_init: auto_init === "Yes",
         gitignore_template: gitignore_template == "Yes" ? "Node" : undefined,
       });
-
+    //create a webhook id for this specific workspace to communicate with the remote repo
+    const { webhookId, secret } = await registerWebhook(
+      octokit,
+      req.user.githubUsername,
+      githubRepo.name
+    );
     //then create the workspace in dir for that repo
     const newRepo = await Repository.create(
       [
@@ -636,6 +657,11 @@ export const createRemoteRepo = async (req, res) => {
           url: githubRepo.html_url,
           isPrivate: githubRepo.private,
           language: githubRepo.language,
+          webhookSettings: {
+            webhookId,
+            secret,
+            active: true,
+          },
           members: [{ userId: req.user._id, role: "owner" }],
           channels: [
             { name: "general", channel_id: new mongoose.Types.ObjectId() },
@@ -660,12 +686,14 @@ export const createRemoteRepo = async (req, res) => {
       "repository",
       newRepo[0]._id,
       `Created new GitHub remote repository ${newRepo[0].githubRepoName} and workspace ${newRepo[0].workspaceName}`
-    )
+    );
 
     //cache invalidation
     await redisClient.del(`user:stats:${req.user._id}`);
-
-    await session.commitTransaction();
+    redisClient.del(getActiveListKey(req.user._id)),
+      redisClient.del(getRepoDetailKey(newRepo[0]._id)),
+      redisClient.del(getDiscoveryKey(req.user._id)),
+      await session.commitTransaction();
 
     res.status(StatusCodes.CREATED).json({
       status: "success",
@@ -720,44 +748,50 @@ export const getContents = async (req, res) => {
 
     const cacheKey = `repo:content:${targetOwner.toLowerCase()}:${targetRepo.toLowerCase()}:${path}`;
 
-    // caching 
-const results = await getOrSetCache(cacheKey, async () => {
-    const octokit = createGitHubClient(req.user.accessToken);
+    // caching
+    const results = await getOrSetCache(
+      cacheKey,
+      async () => {
+        const octokit = createGitHubClient(req.user.accessToken);
 
-    const { data } = await octokit.rest.repos.getContent({
-        owner: targetOwner,
-        repo: targetRepo,
-        path: path,
-    });
+        const { data } = await octokit.rest.repos.getContent({
+          owner: targetOwner,
+          repo: targetRepo,
+          path: path,
+        });
 
-    if (Array.isArray(data)) {
-        // Return a clean object for "directory" type
-        return {
+        if (Array.isArray(data)) {
+          // Return a clean object for "directory" type
+          return {
             type: "dir",
             files: data.map((item) => ({
-                name: item.name,
-                path: item.path,
-                type: item.type,
-                sha: item.sha,
-                url: item.html_url,
+              name: item.name,
+              path: item.path,
+              type: item.type,
+              sha: item.sha,
+              url: item.html_url,
             })),
-        };
-    } else {
-        // Return a clean object for "file" type
-        const decodedContent = Buffer.from(data.content, "base64").toString("utf-8");
-        return {
+          };
+        } else {
+          // Return a clean object for "file" type
+          const decodedContent = Buffer.from(data.content, "base64").toString(
+            "utf-8"
+          );
+          return {
             type: "file",
             fileData: {
-                name: data.name,
-                path: data.path,
-                content: decodedContent,
-                size: data.size,
-                sha: data.sha,
-                downloadUrl: data.download_url,
+              name: data.name,
+              path: data.path,
+              content: decodedContent,
+              size: data.size,
+              sha: data.sha,
+              downloadUrl: data.download_url,
             },
-        };
-    }
-}, 120);
+          };
+        }
+      },
+      120
+    );
 
     return res.status(StatusCodes.OK).json({
       status: "success",
@@ -778,10 +812,10 @@ const results = await getOrSetCache(cacheKey, async () => {
 export const getRepoLanguages = async (req, res) => {
   try {
     const { workspaceId, owner, repo } = req.query;
-    
+
     let targetOwner = owner;
     let targetRepo = repo;
-    
+
     //same logic with get content for a workspace or a repo
     if (workspaceId) {
       const workspace = await Repository.findById(workspaceId);
@@ -802,34 +836,35 @@ export const getRepoLanguages = async (req, res) => {
 
     const cacheKey = `repo:languages:${targetOwner.toLowerCase()}:${targetRepo.toLowerCase()}`;
 
-    
+    //caching
 
-    //caching 
+    const stats = await getOrSetCache(
+      cacheKey,
+      async () => {
+        const octokit = createGitHubClient(req.user.accessToken);
 
-    const stats = await getOrSetCache(cacheKey,async ()=> {
-      const octokit = createGitHubClient(req.user.accessToken);
+        //fetch languages from github
+        const { data: languages } = await octokit.rest.repos.listLanguages({
+          owner: targetOwner,
+          repo: targetRepo,
+        });
 
-      //fetch languages from github
-    const { data: languages } = await octokit.rest.repos.listLanguages({
-      owner: targetOwner,
-      repo: targetRepo,
-    });
-
-    //calculate the percentage from each language
-    const totalBytes = Object.values(languages).reduce(
-      (acc, curr) => acc + curr,
-      0
+        //calculate the percentage from each language
+        const totalBytes = Object.values(languages).reduce(
+          (acc, curr) => acc + curr,
+          0
+        );
+        return Object.keys(languages).map((lang) => ({
+          label: lang,
+          value:
+            totalBytes > 0
+              ? ((languages[lang] / totalBytes) * 100).toFixed(1)
+              : 0,
+          color: getLanguageColor(lang),
+        }));
+      },
+      3600
     );
-    return Object.keys(languages).map((lang) => ({
-      label: lang,
-      value:
-        totalBytes > 0 ? ((languages[lang] / totalBytes) * 100).toFixed(1) : 0,
-      color: getLanguageColor(lang),
-    }));
-    }, 3600)
-    
-
-    
 
     res.status(StatusCodes.OK).json({ status: "success", data: stats });
   } catch (error) {
@@ -888,9 +923,10 @@ export const updateFile = async (req, res) => {
     );
 
     // invalidating cache
-    await redisClient.del(`repo:content:${repo.githubOwner.toLowerCase()}:${repo.githubRepoName.toLowerCase()}:${path}`);
-    await 
-    res.status(StatusCodes.OK).json({
+    await redisClient.del(
+      `repo:content:${repo.githubOwner.toLowerCase()}:${repo.githubRepoName.toLowerCase()}:${path}`
+    );
+    await res.status(StatusCodes.OK).json({
       status: "success",
       message: "File successfully committed to Github",
       data: {

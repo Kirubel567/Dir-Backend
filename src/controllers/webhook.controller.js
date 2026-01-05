@@ -1,5 +1,5 @@
-import { Repository } from "../models/repository.model";
-import GitHubEvent from "../models/githubEvents.model";
+import { Repository } from "../models/repository.model.js";
+import GitHubEvent from "../models/githubEvents.model.js";
 import { verifyGithubSignature } from "../utils/webhook.util.js";
 import { createLog } from "../utils/activity.util.js";
 import { invalidateRepoCache } from "../utils/cache.util.js";
@@ -16,7 +16,7 @@ export const handleGithubWebhook = async (req, res) => {
     const repo = await Repository.findOne({ githubId });
 
     if (!repo) {
-      return res.status(StatusCodes.OK).send("Repository not tracked in Dir");
+      return res.status(StatusCodes.OK).send("Workspace not found in Dir");
     }
 
     //check that the request is really coming from github itself
@@ -37,25 +37,34 @@ export const handleGithubWebhook = async (req, res) => {
       payload: payload,
     });
 
-    //handle some specific logics and add them to the activity log
-    if (eventType === "push") {
-      await invalidateRepoCashe(repo._id);
+    //handle different evetns to log into activity log
+    let logMessage = "";
+    switch (eventType) {
+      case "push":
+        await invalidateRepoCache(repo.ownerId, repo._id);
+        logMessage = `pushed to ${payload.ref.split("/").pop()}`;
+        break;
+      case "issue":
+        logMessage = `${payload.action} issue: ${payload.issue.title}`;
+        break;
+      case "star":
+        logMessage = `starred the repository`;
+    }
 
+    if (logMessage) {
       await createLog(
         repo.ownerId,
         repo._id,
-        "github_push",
+        `github_${eventType}`,
         "repository",
         repo._id,
-        `GitHub: ${payload.sender.login} pushed to ${payload.ref
-          .split("/")
-          .pop()}`
+        `GitHub: ${payload.sender.login} ${logMessage}`
       );
     }
 
     res.status(StatusCodes.OK).send("Webhook processed successfully.");
   } catch (err) {
-    console.error("Webhook Error:", error);
+    console.error("Webhook Error:", err);
     res
       .status(StatusCodes.INTERNAL_SERVER_ERROR)
       .send("Webhook processing failed.");
